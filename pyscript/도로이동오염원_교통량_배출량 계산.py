@@ -22,6 +22,10 @@ Eij = VKT * (EFi/1000) * DF * (1- R/100)
 
 '''
 
+#저감장치 제거율=>DPF 사용가정, 전국 부착률 50%가정
+R_co, R_voc, R_pm = 99.5, 90, 83.6
+
+
 
 def calculate_Engine_HotStart_EFi():
 
