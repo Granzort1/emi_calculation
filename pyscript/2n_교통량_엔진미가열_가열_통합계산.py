@@ -126,6 +126,10 @@ def calculate_emission_for_time(row, auxiliary_data):
     emission_factors['소분류'] = emission_factors['소분류'].astype(str).str.strip().str.upper()
     emission_factors['연료'] = emission_factors['연료'].astype(str).str.strip().str.upper()
 
+    # 엔진미가열 상태 주행거리 분율 계산을 위한 상수 설정
+    l_trip = 12.4  # 평균 1회 주행거리 (km)
+    beta = 0.647 - 0.025 * l_trip - (0.00974 - 0.000385 * l_trip) * T
+
     for vehicle_class in target_classes:
         vehicle_count = row[vehicle_class]
         if vehicle_count == 0:
@@ -204,14 +208,7 @@ def calculate_emission_for_time(row, auxiliary_data):
         combinations = combinations[['소분류', '연료', '연식', '누적비율', '조합비율']]
         combinations['차종'] = ef_class_name  # 배출계수 파일에서 사용할 차종 이름
 
-        # 배출계수 및 열화계수 적용 전에 디버깅 정보 출력
-        # print(f"Processing class: {vehicle_class}, vehicle_count: {vehicle_count}")
-        # print(f"Number of combinations: {len(combinations)}")
-
         emission_factors_filtered = emission_factors[emission_factors['차종'] == ef_class_name]
-
-        # 디버깅 정보 출력
-        # print(f"Number of emission factors for {ef_class_name}: {len(emission_factors_filtered)}")
 
         for idx_c, combo in combinations.iterrows():
             sub_type = combo['소분류']
@@ -230,7 +227,6 @@ def calculate_emission_for_time(row, auxiliary_data):
             ef_subset = ef_subset[ef_subset['추가조건'].apply(lambda x: check_additional_conditions(x, V, T))]
 
             if ef_subset.empty:
-                # print(f"No emission factors found for combination: {sub_type}, {fuel}, {model_year}")
                 # 배출계수를 찾지 못한 조합을 리스트에 추가
                 missing_emission_factors.append({
                     'DateTime': row['DateTime'],
@@ -241,8 +237,6 @@ def calculate_emission_for_time(row, auxiliary_data):
                     '연식': model_year
                 })
                 continue
-            # else:
-                # print(f"Emission factors found for combination: {sub_type}, {fuel}, {model_year}")
 
             for pollutant in pollutants:
                 ef_pollutant = ef_subset[ef_subset['물질'] == pollutant]
@@ -269,9 +263,21 @@ def calculate_emission_for_time(row, auxiliary_data):
                         elif pollutant in ['PM10', 'PM25']:
                             R_value = 83.6 * R_installation_rate
 
-                # 배출량 계산
-                Eij = VKT * (EFi_value / 1000) * DF_value * (1 - R_value / 100)
-                emission = Eij * vehicle_count * combo_ratio
+                # 배출량 계산 (엔진미가열 배출량 포함)
+                eHOT = EFi_value / 1000 * DF_value * (1 - R_value / 100)  # 단위: g/km
+
+                # 엔진미가열 배출량 계산 (승용차와 승합차에만 적용)
+                if vehicle_class in ['01_car', '03_van']:
+                    e_cold_ratio = calculate_cold_hot_ratio(fuel, pollutant, T)
+                    delta_ratio = e_cold_ratio - 1
+                    if delta_ratio < 0:
+                        delta_ratio = 0  # 음수일 경우 0으로 설정
+                    E_cold = beta * vehicle_count * VKT * eHOT * delta_ratio * combo_ratio
+                    emission = E_cold
+                else:
+                    # 일반 배출량 계산
+                    Eij = VKT * eHOT
+                    emission = Eij * vehicle_count * combo_ratio
 
                 # 결과 저장
                 key = f"{vehicle_class}_{pollutant}"
@@ -282,14 +288,66 @@ def calculate_emission_for_time(row, auxiliary_data):
 
     return emission_row
 
+def calculate_cold_hot_ratio(fuel, pollutant, T):
+    # 엔진미가열 대비 엔진가열 배출 비율 계산 함수
+    fuel = fuel.upper()
+    T = float(T)
+    ratio = None
+    if fuel == '휘발유':
+        # Closed loop Gasoline Powered Vehicles (자동제어)
+        if pollutant == 'CO':
+            ratio = 9.04 - 0.09 * T
+        elif pollutant == 'NOx':
+            ratio = 3.66 - 0.006 * T
+        elif pollutant == 'VOC':
+            ratio = 12.59 - 0.06 * T
+        else:
+            ratio = 1
+    elif fuel == '경유':
+        if pollutant == 'CO':
+            ratio = 1.9 - 0.03 * T
+        elif pollutant == 'NOx':
+            ratio = 1.3 - 0.013 * T
+        elif pollutant == 'VOC':
+            ratio = 3.1 - 0.09 * T
+            if T > 29:
+                ratio = max(ratio, 0.5)
+        elif pollutant == 'PM10' or pollutant == 'PM25':
+            ratio = 3.1 - 0.1 * T
+            if T > 26:
+                ratio = max(ratio, 0.5)
+        else:
+            ratio = 1
+    elif fuel == 'LPG':
+        if pollutant == 'CO':
+            ratio = 3.66 - 0.09 * T
+        elif pollutant == 'NOx':
+            ratio = 0.98 - 0.006 * T
+        elif pollutant == 'VOC':
+            ratio = 2.24 - 0.06 * T
+            if T > 29:
+                ratio = max(ratio, 0.5)
+        else:
+            ratio = 1
+    else:
+        ratio = 1  # 기타 연료는 비율 1로 처리
+
+    # 비율이 0 이하일 경우 최소값 0.5로 설정
+    if ratio <= 0:
+        ratio = 0.5
+
+    return ratio
+
 def check_model_year_condition(condition_str, model_year):
     try:
         model_year = int(model_year)
         condition_str_original = condition_str  # 디버깅을 위한 원본 조건 저장
         condition_str = str(condition_str).strip().upper()
 
-        # 따옴표 등 특수 문자 제거
-        condition_str = condition_str.replace("’", "").replace("'", "").replace('"', '')
+        # 특수 문자 및 따옴표 제거
+        condition_str = condition_str.replace("’", "").replace("‘", "")
+        condition_str = condition_str.replace("“", "").replace("”", "")
+        condition_str = condition_str.replace("″", "").replace("'", "").replace('"', '')
 
         # 'ALL' 처리
         if condition_str == 'ALL':
@@ -314,7 +372,7 @@ def check_model_year_condition(condition_str, model_year):
         return result
 
     except Exception as e:
-        print(f"Error evaluating condition '{condition_str}': {e}")
+        print(f"Error evaluating condition '{condition_str_original}': {e}")
         return False
 
 def check_additional_conditions(condition_str, V, T):
@@ -323,6 +381,12 @@ def check_additional_conditions(condition_str, V, T):
     condition_str_original = condition_str  # 디버깅을 위한 원본 조건 저장
     condition_str = condition_str.strip().upper()
     condition_str = condition_str.replace('V', str(V)).replace('T', str(T))
+
+    # 특수 문자 및 따옴표 제거
+    condition_str = condition_str.replace("’", "").replace("‘", "")
+    condition_str = condition_str.replace("“", "").replace("”", "")
+    condition_str = condition_str.replace("″", "").replace("'", "").replace('"', '')
+
     condition_str = condition_str.replace('AND', ' and ').replace('OR', ' or ')
     condition_str = re.sub(r'(?<![<>!])=(?!=)', '==', condition_str)
     try:
@@ -330,22 +394,19 @@ def check_additional_conditions(condition_str, V, T):
         result = eval(condition_str, allowed_names, {})
         return result
     except Exception as e:
-        print(f"Error evaluating additional condition '{condition_str}': {e}")
+        print(f"Error evaluating additional condition '{condition_str_original}': {e}")
         return False
 
 def calculate_emission_factor(EFi_formula, V):
     if pd.isna(EFi_formula) or str(EFi_formula).strip() == '':
         print("EFi_formula is empty or NaN.")
         return 0
-    EFi_formula = str(EFi_formula)  # 문자열로 변환
-    # 특수 문자 대체
-    EFi_formula = EFi_formula.replace('×', '*').replace('–', '-')
+    EFi_formula = str(EFi_formula)
+    EFi_formula = EFi_formula.replace('×', '*').replace('–', '-').replace('−', '-')
     EFi_formula = EFi_formula.replace('V', str(V))
     EFi_formula = EFi_formula.replace('^', '**')
-    EFi_formula = EFi_formula.replace('EXP', 'math.exp')  # 'EXP'를 'math.exp'로 대체
-    EFi_formula = EFi_formula.replace('Exp', 'math.exp')  # 'Exp'를 'math.exp'로 대체
+    EFi_formula = EFi_formula.replace('EXP', 'math.exp').replace('Exp', 'math.exp')
     try:
-        # 안전한 eval 사용
         EFi_value = eval(EFi_formula, {"__builtins__": None, 'math': math})
         return EFi_value
     except Exception as e:
@@ -357,7 +418,7 @@ def calculate_deterioration_factor(DF_str, model_year):
     if match:
         a = int(match.group(1))
         b = int(match.group(2))
-        dy = 2024 - int(model_year)  # 현재 연도를 2024로 수정
+        dy = 2024 - int(model_year)
         DF = min(max(1 + (dy - b) * (a / 100), 1), 1 + (a / 10))
         return DF
     else:
