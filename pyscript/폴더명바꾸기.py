@@ -58,7 +58,7 @@ def rename_folders(root_path):
 
 if __name__ == "__main__":
     # 대상 폴더 경로 설정
-    target_path = r"C:\dense_traffic_emi\output"
+    target_path = r"C:\emi_calculation\ViewT"
     
     # 실행 전 확인
     print(f"다음 경로의 폴더명을 변경합니다: {target_path}")

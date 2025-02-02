@@ -7,7 +7,7 @@ import multiprocessing
 
 def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir, sL=0.06):
 
-    factor_dir = r"C:\dense_traffic_emi\factor"  # 1. 필요한 파일 경로 설정
+    factor_dir = r"C:\emi_calculation\factor"  # 1. 필요한 파일 경로 설정
     vehicle_type_ratio_file = os.path.join(factor_dir, "vehicle_type_ratio_coefficient_v1.xlsx")
     vehicle_fuel_ratio_file = os.path.join(factor_dir, "vehicle_fuel_ratio_v1.xlsx")
     vehicle_age_ratio_file = os.path.join(factor_dir, "vehicle_age_ratio_v1.xlsx")
@@ -33,7 +33,7 @@ def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir,
     # 배출계수 매핑 정의
     ef_class_mapping = {
         '01_car': '승용차',
-        '02_taxi': '승용차',
+        '02_taxi': '택시',
         '03_van': '승합차',
         '04_bus': '버스',
         '05_LightTruck': '화물차',
@@ -47,11 +47,11 @@ def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir,
         '01_car': ['경형', '소형', '중형', '대형'],
         '02_taxi': ['소형', '중형', '대형'],
         '03_van': ['경형', '소형', '중형', '대형', '특수형'],
-        '04_bus': ['시내', '시외', '전세', '고속'],
+        '04_bus': ['시내버스', '시외버스', '전세버스', '고속버스'],
         '05_LightTruck': ['경형', '소형'],
-        '06_HeavyTruck': ['중형', '대형', '특수형', '덤프트럭', '콘크리트 믹서'],
+        '06_HeavyTruck': ['중형', '대형', '특수형', '덤프트럭', '콘크리트믹서'],
         '07_SpecialVehicle': ['구난차', '견인차', '기타'],
-        '08_Motorcycle': ['경형', '소형', '중형', '대형']
+        '08_Motorcycle': ['']
     }
 
     # 보조 데이터 사전 생성
@@ -314,9 +314,9 @@ def calculate_emission_for_time(row, auxiliary_data):
             for idx2, subtype_row in type_ratios.iterrows():
                 subtype = subtype_row['소분류']
                 subtype_ratio = subtype_row['비율']
-                if subtype == '시내':
+                if subtype == '시내버스':
                     fuel = 'CNG'
-                elif subtype in ['시외', '전세', '고속']:
+                elif subtype in ['시외버스', '전세버스', '고속버스']:
                     fuel = '경유'
                 else:
                     fuel = '기타'
@@ -693,43 +693,43 @@ if __name__ == '__main__':
             'T': 31.1,
             'ta_min': 28.1,
             'ta_rise': 8.3
-        },}
-    #     '경기동로_여름_서측도로_차량수.xlsx': {
-    #         'VKT': 0.333,
-    #         'V': 64,
-    #         'T': 31.1,
-    #         'ta_min': 28.1,
-    #         'ta_rise': 8.3
-    #     },
-    #     '경기동로_여름_북측도로_차량수.xlsx': {
-    #         'VKT': 0.526,
-    #         'V': 64,
-    #         'T': 31.1,
-    #         'ta_min': 28.1,
-    #         'ta_rise': 8.3
-    #     },
-    #     '동부대로_여름_서측도로_차량수.xlsx': {
-    #         'VKT': 0.283,
-    #         'V': 48,
-    #         'T': 31.1,
-    #         'ta_min': 28.1,
-    #         'ta_rise': 8.3
-    #     },
-    #     '동부대로_여름_남측도로_차량수.xlsx': {
-    #         'VKT': 1.67,
-    #         'V': 64,
-    #         'T': 31.1,
-    #         'ta_min': 28.1,
-    #         'ta_rise': 8.3
-    #     },
-    #     '경기대로_여름_도로_차량수.xlsx': {
-    #         'VKT': 1.15,
-    #         'V': 64,
-    #         'T': 31.1,
-    #         'ta_min': 28.1,
-    #         'ta_rise': 8.3
-    #     },
-    # }
+        },
+        '경기동로_여름_서측도로_차량수.xlsx': {
+            'VKT': 0.333,
+            'V': 64,
+            'T': 31.1,
+            'ta_min': 28.1,
+            'ta_rise': 8.3
+        },
+        '경기동로_여름_북측도로_차량수.xlsx': {
+            'VKT': 0.526,
+            'V': 64,
+            'T': 31.1,
+            'ta_min': 28.1,
+            'ta_rise': 8.3
+        },
+        '동부대로_여름_서측도로_차량수.xlsx': {
+            'VKT': 0.283,
+            'V': 48,
+            'T': 31.1,
+            'ta_min': 28.1,
+            'ta_rise': 8.3
+        },
+        '동부대로_여름_남측도로_차량수.xlsx': {
+            'VKT': 1.67,
+            'V': 64,
+            'T': 31.1,
+            'ta_min': 28.1,
+            'ta_rise': 8.3
+        },
+        '경기대로_여름_도로_차량수.xlsx': {
+            'VKT': 1.15,
+            'V': 64,
+            'T': 31.1,
+            'ta_min': 28.1,
+            'ta_rise': 8.3
+        },
+    }
 
     input_files_fall = {
         '경기동로_가을_동측_차량수.xlsx': {
@@ -738,43 +738,43 @@ if __name__ == '__main__':
             'T': 18.4,
             'ta_min': 15.2,
             'ta_rise': 8
-        },}
-    #     '경기동로_가을_서측_차량수.xlsx': {
-    #         'VKT': 0.333,
-    #         'V': 64,
-    #         'T': 18.4,
-    #         'ta_min': 15.2,
-    #         'ta_rise': 8
-    #     },
-    #     '경기동로_가을_북측_차량수.xlsx': {
-    #         'VKT': 0.526,
-    #         'V': 64,
-    #         'T': 18.4,
-    #         'ta_min': 15.2,
-    #         'ta_rise': 8
-    #     },
-    #     '동부대로_가을_서측도로_차량수.xlsx': {
-    #         'VKT': 0.283,
-    #         'V': 48,
-    #         'T': 18.4,
-    #         'ta_min': 15.2,
-    #         'ta_rise': 8
-    #     },
-    #     '동부대로_가을_남측도로_차량수.xlsx': {
-    #         'VKT': 1.67,
-    #         'V': 64,
-    #         'T': 18.4,
-    #         'ta_min': 15.2,
-    #         'ta_rise': 8
-    #     },
-    #     '경기대로_가을_도로_차량수.xlsx': {
-    #         'VKT': 1.15,
-    #         'V': 64,
-    #         'T': 18.4,
-    #         'ta_min': 15.2,
-    #         'ta_rise': 8
-    #     },
-    # }
+        },
+        '경기동로_가을_서측_차량수.xlsx': {
+            'VKT': 0.333,
+            'V': 64,
+            'T': 18.4,
+            'ta_min': 15.2,
+            'ta_rise': 8
+        },
+        '경기동로_가을_북측_차량수.xlsx': {
+            'VKT': 0.526,
+            'V': 64,
+            'T': 18.4,
+            'ta_min': 15.2,
+            'ta_rise': 8
+        },
+        '동부대로_가을_서측도로_차량수.xlsx': {
+            'VKT': 0.283,
+            'V': 48,
+            'T': 18.4,
+            'ta_min': 15.2,
+            'ta_rise': 8
+        },
+        '동부대로_가을_남측도로_차량수.xlsx': {
+            'VKT': 1.67,
+            'V': 64,
+            'T': 18.4,
+            'ta_min': 15.2,
+            'ta_rise': 8
+        },
+        '경기대로_가을_도로_차량수.xlsx': {
+            'VKT': 1.15,
+            'V': 64,
+            'T': 18.4,
+            'ta_min': 15.2,
+            'ta_rise': 8
+        },
+    }
 
 
     input_files_winter = {
@@ -784,50 +784,50 @@ if __name__ == '__main__':
             'T': 0.4,
             'ta_min': -4.3,
             'ta_rise': 8.5
-        },}
-    #     '경기동로_겨울_서측도로_차량수.xlsx': {
-    #         'VKT': 0.333,
-    #         'V': 64,
-    #         'T': 0.4,
-    #         'ta_min': -4.3,
-    #         'ta_rise': 8.5
-    #     },
-    #     '경기동로_겨울_북측도로_차량수.xlsx': {
-    #         'VKT': 0.526,
-    #         'V': 64,
-    #         'T': 0.4,
-    #         'ta_min': -4.3,
-    #         'ta_rise': 8.5
-    #     },
-    #     '동부대로_겨울_서측도로_차량수.xlsx': {
-    #         'VKT': 0.283,
-    #         'V': 48,
-    #         'T': 0.4,
-    #         'ta_min': -4.3,
-    #         'ta_rise': 8.5
-    #     },
-    #     '동부대로_겨울_남측도로_차량수.xlsx': {
-    #         'VKT': 1.67,
-    #         'V': 64,
-    #         'T': 0.4,
-    #         'ta_min': -4.3,
-    #         'ta_rise': 8.5
-    #     },
-    #     '경기대로_겨울_도로_차량수_.xlsx': {
-    #         'VKT': 1.15,
-    #         'V': 64,
-    #         'T': 0.4,
-    #         'ta_min': -4.3,
-    #         'ta_rise': 8.5
-    #     },
-    # }
+        },
+        '경기동로_겨울_서측도로_차량수.xlsx': {
+            'VKT': 0.333,
+            'V': 64,
+            'T': 0.4,
+            'ta_min': -4.3,
+            'ta_rise': 8.5
+        },
+        '경기동로_겨울_북측도로_차량수.xlsx': {
+            'VKT': 0.526,
+            'V': 64,
+            'T': 0.4,
+            'ta_min': -4.3,
+            'ta_rise': 8.5
+        },
+        '동부대로_겨울_서측도로_차량수.xlsx': {
+            'VKT': 0.283,
+            'V': 48,
+            'T': 0.4,
+            'ta_min': -4.3,
+            'ta_rise': 8.5
+        },
+        '동부대로_겨울_남측도로_차량수.xlsx': {
+            'VKT': 1.67,
+            'V': 64,
+            'T': 0.4,
+            'ta_min': -4.3,
+            'ta_rise': 8.5
+        },
+        '경기대로_겨울_도로_차량수.xlsx': {
+            'VKT': 1.15,
+            'V': 64,
+            'T': 0.4,
+            'ta_min': -4.3,
+            'ta_rise': 8.5
+        },
+    }
 
 
 
     # 입력 기본 경로
-    input_base_dir = 'C:/dense_traffic_emi/input'
-    # 출력 기본 경로 
-    output_base_dir = 'C:/dense_traffic_emi/output'
+    input_base_dir = 'C:/emi_calculation/input'
+    # 출력 기본 경로
+    output_base_dir = 'C:/emi_calculation/output'
 
 
     # 계산에 필요한 파라미터 설정
@@ -839,36 +839,61 @@ if __name__ == '__main__':
     sL = 0.06
     P_4N = 0
 
-    # 각 파일별로 처리
-    for input_file, params in input_files_fall.items():
-        # 전체 입력 파일 경로
-        full_input_path = os.path.join(input_base_dir, input_file)
-        
-        # 출력 디렉토리 생성 (파일명에서 확장자 제거)
-        output_dir_name = os.path.splitext(input_file)[0]
-        output_dir = os.path.join(output_base_dir, f'{output_dir_name}_emi')
-        
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-            
-        # 입력 데이터 로드
-        try:
-            inputdata = pd.read_excel(full_input_path)
-            print(f"처리 중: {input_file}")
-            print(f"매개변수: VKT={params['VKT']}, V={params['V']}, T={params['T']}, ta_min={params['ta_min']}, ta_rise={params['ta_rise']}")
-            
-            # 배출량 계산 함수 호출
-            calculate_emissions(inputdata, 
-                             VKT=params['VKT'], 
-                             V=params['V'], 
-                             T=params['T'], 
-                             ta_min=params['ta_min'], 
-                             ta_rise=params['ta_rise'], 
-                             P_4N=P_4N, 
-                             sL=sL, 
-                             output_dir=output_dir)
-            
-            print(f"완료: {input_file}\n")
-            
-        except Exception as e:
-            print(f"오류 발생 ({input_file}): {str(e)}\n")
+    # 봄, 가을, 겨울 input 파일 집합
+    input_files_seasons = [
+        input_files,  # 여름
+        input_files_fall,  # 가을
+        input_files_winter  # 겨울
+    ]
+
+    # 시즌별로 처리
+    for season_idx, input_files in enumerate(input_files_seasons):
+        if season_idx == 0:
+            print("=== 여름 데이터 처리 시작 ===")
+        elif season_idx == 1:
+            print("=== 가을 데이터 처리 시작 ===")
+        elif season_idx == 2:
+            print("=== 겨울 데이터 처리 시작 ===")
+
+        # 각 파일별로 처리
+        for input_file, params in input_files.items():
+            # 전체 입력 파일 경로
+            full_input_path = os.path.join(input_base_dir, input_file)
+
+            # 출력 디렉토리 생성 (파일명에서 확장자 제거)
+            output_dir_name = os.path.splitext(input_file)[0]
+            output_dir = os.path.join(output_base_dir, f'{output_dir_name}_emi')
+
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
+            # 입력 데이터 로드
+            try:
+                inputdata = pd.read_excel(full_input_path)
+                print(f"처리 중: {input_file}")
+                print(
+                    f"매개변수: VKT={params['VKT']}, V={params['V']}, T={params['T']}, ta_min={params['ta_min']}, ta_rise={params['ta_rise']}")
+
+                # 배출량 계산 함수 호출
+                calculate_emissions(inputdata,
+                                    VKT=params['VKT'],
+                                    V=params['V'],
+                                    T=params['T'],
+                                    ta_min=params['ta_min'],
+                                    ta_rise=params['ta_rise'],
+                                    P_4N=P_4N,
+                                    sL=sL,
+                                    output_dir=output_dir)
+
+                print(f"완료: {input_file}\n")
+
+            except Exception as e:
+                print(f"오류 발생 ({input_file}): {str(e)}\n")
+
+        # 시즌별 데이터 처리 완료 메시지
+        if season_idx == 0:
+            print("=== 여름 데이터 처리 완료 ===\n")
+        elif season_idx == 1:
+            print("=== 가을 데이터 처리 완료 ===\n")
+        elif season_idx == 2:
+            print("=== 겨울 데이터 처리 완료 ===\n")

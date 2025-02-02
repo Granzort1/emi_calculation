@@ -33,7 +33,7 @@ def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir,
     # 배출계수 매핑 정의
     ef_class_mapping = {
         '01_car': '승용차',
-        '02_taxi': '승용차',
+        '02_taxi': '택시',
         '03_van': '승합차',
         '04_bus': '버스',
         '05_LightTruck': '화물차',
@@ -47,11 +47,11 @@ def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir,
         '01_car': ['경형', '소형', '중형', '대형'],
         '02_taxi': ['소형', '중형', '대형'],
         '03_van': ['경형', '소형', '중형', '대형', '특수형'],
-        '04_bus': ['시내', '시외', '전세', '고속'],
+        '04_bus': ['시내버스', '시외버스', '전세버스', '고속버스'],
         '05_LightTruck': ['경형', '소형'],
-        '06_HeavyTruck': ['중형', '대형', '특수형', '덤프트럭', '콘크리트 믹서'],
+        '06_HeavyTruck': ['중형', '대형', '특수형', '덤프트럭', '콘크리트믹서'],
         '07_SpecialVehicle': ['구난차', '견인차', '기타'],
-        '08_Motorcycle': ['경형', '소형', '중형', '대형']
+        '08_Motorcycle': ['']
     }
 
     # 보조 데이터 사전 생성
@@ -314,9 +314,9 @@ def calculate_emission_for_time(row, auxiliary_data):
             for idx2, subtype_row in type_ratios.iterrows():
                 subtype = subtype_row['소분류']
                 subtype_ratio = subtype_row['비율']
-                if subtype == '시내':
+                if subtype == '시내버스':
                     fuel = 'CNG'
-                elif subtype in ['시외', '전세', '고속']:
+                elif subtype in ['시외버스', '전세버스', '고속버스']:
                     fuel = '경유'
                 else:
                     fuel = '기타'
