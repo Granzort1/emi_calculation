@@ -1,8 +1,7 @@
+import numpy as np
 
-x=3
-if x <= 10:
-    y=True
-elif x>=11:
-    y="big"
 
-print(y)
+
+x = (62,0,0,3) + (115,8,2,25)
+
+print(x)
