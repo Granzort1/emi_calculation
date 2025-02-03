@@ -687,31 +687,31 @@ def calculate_deterioration_factor(DF_str, model_year):
 if __name__ == '__main__':
  #   입력 파일과 매개변수 매핑
 
-    경기동로_동측_ViewT_VKT = 2.067
-    경기동로_서측_ViewT_VKT = 1.476
-    경기동로_북측_ViewT_VKT = 1.618
-    경기대로_ViewT_VKT     = 1.667
-    동부대로_남측_ViewT_VKT = 3.21
+    경기동로_동측_VKT = 2.067
+    경기동로_서측_VKT = 1.476
+    경기동로_북측_VKT = 1.618
+    경기대로_VKT     = 1.667
+    동부대로_남측_VKT = 3.21
 
 
 
     input_files = {
         '경기동로_여름_동측도로_차량수.xlsx': {
-            'VKT': 경기동로_동측_ViewT_VKT,
+            'VKT': 경기동로_동측_VKT,
             'V': 64,
             'T': 31.1,
             'ta_min': 28.1,
             'ta_rise': 8.3
         },
         '경기동로_여름_서측도로_차량수.xlsx': {
-            'VKT': 경기동로_서측_ViewT_VKT,
+            'VKT': 경기동로_서측_VKT,
             'V': 64,
             'T': 31.1,
             'ta_min': 28.1,
             'ta_rise': 8.3
         },
         '경기동로_여름_북측도로_차량수.xlsx': {
-            'VKT': 경기동로_북측_ViewT_VKT,
+            'VKT': 경기동로_북측_VKT,
             'V': 64,
             'T': 31.1,
             'ta_min': 28.1,
@@ -719,14 +719,14 @@ if __name__ == '__main__':
         },
 
         '동부대로_여름_남측도로_차량수.xlsx': {
-            'VKT': 동부대로_남측_ViewT_VKT,
+            'VKT': 동부대로_남측_VKT,
             'V': 64,
             'T': 31.1,
             'ta_min': 28.1,
             'ta_rise': 8.3
         },
         '경기대로_여름_도로_차량수.xlsx': {
-            'VKT': 경기대로_ViewT_VKT,
+            'VKT': 경기대로_VKT,
             'V': 64,
             'T': 31.1,
             'ta_min': 28.1,
@@ -736,21 +736,21 @@ if __name__ == '__main__':
 
     input_files_fall = {
         '경기동로_가을_동측도로_차량수.xlsx': {
-            'VKT': 경기동로_동측_ViewT_VKT,
+            'VKT': 경기동로_동측_VKT,
             'V': 64,
             'T': 18.4,
             'ta_min': 15.2,
             'ta_rise': 8
         },
         '경기동로_가을_서측도로_차량수.xlsx': {
-            'VKT': 경기동로_서측_ViewT_VKT,
+            'VKT': 경기동로_서측_VKT,
             'V': 64,
             'T': 18.4,
             'ta_min': 15.2,
             'ta_rise': 8
         },
         '경기동로_가을_북측도로_차량수.xlsx': {
-            'VKT': 경기동로_북측_ViewT_VKT,
+            'VKT': 경기동로_북측_VKT,
             'V': 64,
             'T': 18.4,
             'ta_min': 15.2,
@@ -758,14 +758,14 @@ if __name__ == '__main__':
         },
 
         '동부대로_가을_남측도로_차량수.xlsx': {
-            'VKT': 동부대로_남측_ViewT_VKT,
+            'VKT': 동부대로_남측_VKT,
             'V': 64,
             'T': 18.4,
             'ta_min': 15.2,
             'ta_rise': 8
         },
         '경기대로_가을_도로_차량수.xlsx': {
-            'VKT': 경기대로_ViewT_VKT,
+            'VKT': 경기대로_VKT,
             'V': 64,
             'T': 18.4,
             'ta_min': 15.2,
@@ -776,21 +776,21 @@ if __name__ == '__main__':
 
     input_files_winter = {
         '경기동로_겨울_동측도로_차량수.xlsx': {
-            'VKT': 경기동로_동측_ViewT_VKT,
+            'VKT': 경기동로_동측_VKT,
             'V': 64,
             'T': 0.4,
             'ta_min': -4.3,
             'ta_rise': 8.5
         },
         '경기동로_겨울_서측도로_차량수.xlsx': {
-            'VKT': 경기동로_서측_ViewT_VKT,
+            'VKT': 경기동로_서측_VKT,
             'V': 64,
             'T': 0.4,
             'ta_min': -4.3,
             'ta_rise': 8.5
         },
         '경기동로_겨울_북측도로_차량수.xlsx': {
-            'VKT': 경기동로_북측_ViewT_VKT,
+            'VKT': 경기동로_북측_VKT,
             'V': 64,
             'T': 0.4,
             'ta_min': -4.3,
@@ -798,14 +798,14 @@ if __name__ == '__main__':
         },
 
         '동부대로_겨울_남측도로_차량수.xlsx': {
-            'VKT': 동부대로_남측_ViewT_VKT,
+            'VKT': 동부대로_남측_VKT,
             'V': 64,
             'T': 0.4,
             'ta_min': -4.3,
             'ta_rise': 8.5
         },
         '경기대로_겨울_도로_차량수.xlsx': {
-            'VKT': 경기대로_ViewT_VKT,
+            'VKT': 경기대로_VKT,
             'V': 64,
             'T': 0.4,
             'ta_min': -4.3,
