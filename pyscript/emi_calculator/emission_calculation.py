@@ -4,12 +4,17 @@ import pandas as pd
 import os
 
 # utilities.py의 함수들 임포트
+# 상대경로 임포트를 절대경로로 수정
 from .utilities import (
-    calculate_cold_hot_ratio, check_model_year_condition,
-    check_additional_conditions, calculate_emission_factor,
-    calculate_deterioration_factor, calculate_sox_Aj,
+    calculate_cold_hot_ratio, 
+    check_model_year_condition,
+    check_additional_conditions, 
+    calculate_emission_factor,
+    calculate_deterioration_factor, 
+    calculate_sox_Aj,
     get_sulfur_fuel
 )
+
 
 def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir, sL=0.06):
     """
@@ -218,12 +223,6 @@ def calculate_emission_for_time(row, auxiliary_data):
     실제 각 row(시간)에 대해 배출량을 계산하는 함수.
     여기서 SOx 계산 부분만 새 규칙 적용.
     """
-    from .utilities import (
-        calculate_cold_hot_ratio, check_model_year_condition,
-        check_additional_conditions, calculate_emission_factor,
-        calculate_deterioration_factor, calculate_sox_Aj,
-        get_sulfur_fuel
-    )
 
     emission_row = {'DateTime': row['DateTime']}
     vehicle_type_ratio = auxiliary_data['vehicle_type_ratio']
@@ -315,17 +314,17 @@ def calculate_emission_for_time(row, auxiliary_data):
         if vehicle_class == '04_bus':
             fuel_ratios_list = []
             for idx2, subtype_row in type_ratios.iterrows():
-                subtype_ = subtype_row['소분류']
+                subtype = subtype_row['소분류']
                 subtype_ratio = subtype_row['비율']
-                if subtype_ == '시내버스':
-                    fuel_ = 'CNG'
-                elif subtype_ in ['시외버스', '전세버스', '고속버스']:
-                    fuel_ = '경유'
+                if subtype == '시내버스':
+                    fuel = 'CNG'
+                elif subtype in ['시외버스', '전세버스', '고속버스']:
+                    fuel = '경유'
                 else:
-                    fuel_ = '기타'
+                    fuel = '기타'
                 fuel_ratios_list.append({
-                    '소분류': subtype_,
-                    '연료': fuel_,
+                    '소분류': subtype,
+                    '연료': fuel,
                     '비율': subtype_ratio
                 })
             type_fuel_ratios = pd.DataFrame(fuel_ratios_list)
@@ -351,9 +350,9 @@ def calculate_emission_for_time(row, auxiliary_data):
 
         # 경유/비경유 분리 후 누적비율 계산
         combinations_list = []
-        for (subtype_, fuel_), group in combinations.groupby(['소분류', '연료']):
+        for (subtype, fuel), group in combinations.groupby(['소분류', '연료']):
             group = group.copy()
-            if fuel_ == '경유':
+            if fuel == '경유':
                 group['조합비율'] = group['비율_x'] * group['비율_y']
                 group = group.sort_values('연식')
                 total_ratio = group['조합비율'].sum()
@@ -373,7 +372,7 @@ def calculate_emission_for_time(row, auxiliary_data):
 
         for idx_c, combo in combinations.iterrows():
             sub_type = combo['소분류']
-            fuel_ = combo['연료']
+            fuel = combo['연료']
             model_year = combo['연식']
             combo_ratio = combo['조합비율']
             vehicle_percentile = combo['누적비율']
@@ -381,7 +380,7 @@ def calculate_emission_for_time(row, auxiliary_data):
             # ef_condition = '소분류', '연료', '연식' 일치 + 추가조건
             ef_condition = (
                 (emission_factors_filtered['소분류'] == sub_type) &
-                (emission_factors_filtered['연료'] == fuel_) &
+                (emission_factors_filtered['연료'] == fuel) &
                 (emission_factors_filtered['연식'].apply(
                     lambda x: check_model_year_condition(x, model_year)
                 ))
@@ -395,13 +394,13 @@ def calculate_emission_for_time(row, auxiliary_data):
                     '입력클래스': vehicle_class,
                     '차종': ef_class_name,
                     '소분류': sub_type,
-                    '연료': fuel_,
+                    '연료': fuel,
                     '연식': model_year
                 })
                 # 이륜차 특수처리 (원본 코드 유지)
                 if vehicle_class == '08_Motorcycle':
-                    if fuel_ in fuel_economy:
-                        fuel_consumption = 1 / fuel_economy[fuel_]
+                    if fuel in fuel_economy:
+                        fuel_consumption = 1 / fuel_economy[fuel]
                     else:
                         fuel_consumption = 0
 
@@ -416,26 +415,28 @@ def calculate_emission_for_time(row, auxiliary_data):
 
                     # SOx나 기타 물질은 0 처리
                     for pollutant in pollutants:
-                        if pollutant in fuel_emission_factors:
-                            emission_factor = fuel_emission_factors[pollutant].get(fuel_, 0)
-                            emission_val = vehicle_count * VKT * emission_factor * combo_ratio
+                        if pollutant == 'SOx':
+                            pass
                         else:
-                            emission_val = 0
+                            # 배출인자가 없으면 0으로 처리
+                            emission_factor = fuel_emission_factors.get(pollutant, {}).get(fuel, 0)
+                            emission = vehicle_count * VKT * emission_factor * combo_ratio
+                        # 결과 저장
                         key = f"{vehicle_class}_{pollutant}"
-                        emission_row[key] = emission_row.get(key, 0) + emission_val
+                        if key not in emission_row:
+                            emission_row[key] = emission
+                        else:
+                            emission_row[key] += emission
                 continue
 
             for pollutant in pollutants:
-                ef_pollutant = ef_subset[ef_subset['물질'] == pollutant]
-                if ef_pollutant.empty:
-                    continue
 
                 if pollutant == 'SOx':
                     # [새 규칙] EFi_DF_Factor_ver7.xlsx 안에 '황산화물배출계수' 열이 있다고 가정
                     # 예: ef_pollutant['황산화물배출계수'].iloc[0] => E01, E16 등
-                    sox_indicator = ef_pollutant['황산화물배출계수'].iloc[0]
+                    sox_indicator = ef_subset['황산화물배출계수'].iloc[0]
                     Aj = calculate_sox_Aj(sox_indicator, V)  # Aj
-                    Sfuel = get_sulfur_fuel(fuel_)           # Sfuel
+                    Sfuel = get_sulfur_fuel(fuel)           # Sfuel
 
                     if Aj is None:
                         # 속도 범위 벗어나면 0 처리
@@ -450,26 +451,30 @@ def calculate_emission_for_time(row, auxiliary_data):
                 elif pollutant in ['PM25_재비산', 'PM10_재비산', 'TSP']:
                     # 재비산 계산 (원본)
                     if pollutant == 'PM25_재비산':
-                        tmp = ef_pollutant[ef_pollutant['물질'] == 'PM25']
+                        ef_pollutant = ef_subset[ef_subset['물질'] == 'PM25']
                         k = 0.15
                     elif pollutant == 'PM10_재비산':
-                        tmp = ef_pollutant[ef_pollutant['물질'] == 'PM10']
+                        ef_pollutant = ef_subset[ef_subset['물질'] == 'PM10']
                         k = 0.62
-                    else:  # TSP
-                        tmp = ef_pollutant[ef_pollutant['물질'] == 'PM10']
+                    elif pollutant == 'TSP':
+                        ef_pollutant = ef_subset[ef_subset['물질'] == 'PM10']
                         k = 3.23
+                    else:
+                        pass
 
-                    if tmp.empty:
+                        
+                    if ef_pollutant.empty:
                         continue
 
-                    W_avg = tmp['평균차중'].iloc[0]
+                    W_avg = ef_pollutant['평균차중'].iloc[0]
                     Efpm = k * (sL ** 0.91) * (W_avg ** 1.02)
-                    emission = VKT * vehicle_count * combo_ratio * Efpm * (1 - P_4N)
-
-                    key = f"{vehicle_class}_{pollutant}"
-                    emission_row[key] = emission_row.get(key, 0) + emission
-
+                    E_PM = VKT * vehicle_count * combo_ratio * Efpm * (1 - P_4N)  #g/h단위 배출량
+                    emission = E_PM
                 else:
+                    ef_pollutant = ef_subset[ef_subset['물질'] == pollutant]
+                    if ef_pollutant.empty:
+                        continue
+
                     # 나머지 배출물질(CO, NOx, VOC, PM10, PM25 등) (원본)
                     EFi_formula = ef_pollutant['배출계수'].iloc[0]
                     EFi_value = calculate_emission_factor(EFi_formula, V)
@@ -478,7 +483,7 @@ def calculate_emission_for_time(row, auxiliary_data):
                     DF_value = calculate_deterioration_factor(DF_str, model_year)
 
                     R_value = 0
-                    if fuel_ == '경유' and pollutant in ['CO', 'VOC', 'PM10', 'PM25']:
+                    if fuel == '경유' and pollutant in ['CO', 'VOC', 'PM10', 'PM25']:
                         if vehicle_percentile <= 0.095:
                             R_installation_rate = 0.358
                             if pollutant == 'CO':
@@ -493,21 +498,26 @@ def calculate_emission_for_time(row, auxiliary_data):
 
                     # 엔진미가열(승용, 승합)
                     if vehicle_class in ['01_car', '03_van']:
-                        e_cold_ratio = calculate_cold_hot_ratio(fuel_, pollutant, T)
+                        e_cold_ratio = calculate_cold_hot_ratio(fuel, pollutant, T)
                         delta_ratio = e_cold_ratio - 1
                         E_cold = (beta * vehicle_count * VKT * eHOT * delta_ratio * combo_ratio)
                         emission = Eij + E_cold
                     else:
                         emission = Eij
 
-                    # 휘발유 증발 배출
-                    if fuel_ == '휘발유':
-                        R_val = vehicle_count * combo_ratio * VKT * (0.6 * e_R_HOT + 0.4 * e_R_WARM)
-                        E_EVA = ((vehicle_count * combo_ratio * e_d * VKT) /
-                                 (daily_vkt.get(vehicle_class))) + R_val
-                        emission += E_EVA
+                    if fuel == '휘발유':
+                        R = vehicle_count * combo_ratio * VKT * (0.6 * e_R_HOT + 0.4*e_R_WARM)
+                        E_EVA = (((vehicle_count * combo_ratio * e_d * VKT) / (daily_vkt.get(vehicle_class))) + R)
+                        emission += E_EVA #g/h
+                    else:
+                        pass
 
-                    key = f"{vehicle_class}_{pollutant}"
-                    emission_row[key] = emission_row.get(key, 0) + emission
+
+                # 결과 저장
+                key = f"{vehicle_class}_{pollutant}"
+                if key not in emission_row:
+                    emission_row[key] = emission
+                else:
+                    emission_row[key] += emission
 
     return emission_row
