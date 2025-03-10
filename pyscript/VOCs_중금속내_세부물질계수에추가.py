@@ -36,6 +36,7 @@ print(additional_data_df.columns.tolist())
 # 계수파일 읽기
 print("계수파일 로딩 중...")
 try:
+    # 데이터 형식을 명시적으로 지정하여 읽기
     factor_df = pd.read_excel(factor_file_path)
     print(f"계수파일 로딩 완료: {factor_df.shape[0]}행, {factor_df.shape[1]}열")
 except Exception as e:
@@ -326,6 +327,9 @@ def get_conditions_from_header(header):
 
     # 문자열 정규화
     clean_header = normalize_str(header)
+    
+    # 헤더에 .1, .2 등의 접미사 제거 (중복 열로 인해 pandas가 자동으로 추가)
+    clean_header = re.sub(r'\.\d+$', '', clean_header)
 
     # 연료 타입 및 연도 정보 추출
     if '휘발유' in clean_header:
@@ -360,6 +364,7 @@ def get_conditions_from_header(header):
             ('화물차', '소형')
         ]
     elif ('중대형화물' in clean_header) or ('특수' in clean_header) or ('버스' in clean_header):
+        fuel_type = '경유'  # 중대형화물, 특수, 버스는 경유 차량으로 가정
         vehicle_types = [
             ('화물차', '중형'),
             ('화물차', '대형'),
@@ -375,20 +380,62 @@ def get_conditions_from_header(header):
 
 
 def create_new_column_name(group_name, substance):
-    """새로운 열 이름 생성"""
-    if '단위:' in group_name:
-        unit = group_name.split('단위:')[1].strip(')')
-        # 특수문자 처리
-        unit = unit.replace('/', '_per_').replace(' ', '_')
-        unit = unit.replace('(', '').replace(')', '')
-        substance = substance.replace(',', '').replace('[', '').replace(']', '')
-        substance = substance.replace('(', '').replace(')', '')
-        return f"{unit}_{substance}"
+    """새로운 열 이름 생성 - 요구사항에 맞게 수정"""
+    # 물질 이름에서 특수 문자 제거
+    clean_substance = substance.replace(',', '').replace('[', '').replace(']', '')
+    clean_substance = clean_substance.replace('(', '').replace(')', '')
+    
+    # 물질군 이름에 따라 다른 열 이름 형식 사용
+    if 'VOCs' in group_name:
+        return f"VOC_frac_{clean_substance}"
+    elif '카보닐화합물' in group_name:
+        # 카보닐화합물도 NMVOC 분율이므로 동일 접두사 사용
+        return f"VOC_frac_{clean_substance}"
+    elif '중금속' in group_name:
+        if 'g/km' in group_name:
+            return f"HM_gkm_{clean_substance}"
+        elif 'ppm/wt fuel' in group_name:
+            return f"HM_ppm_{clean_substance}"
+    elif 'PAHs' in group_name:
+        return f"PAH_gkm_{clean_substance}"
     else:
         # 단위 정보가 없는 경우
-        substance = substance.replace(',', '').replace('[', '').replace(']', '')
-        substance = substance.replace('(', '').replace(')', '')
-        return f"{substance}"
+        return f"{clean_substance}"
+
+
+def convert_coefficient(coefficient):
+    """계수값 변환 함수 - 오류 처리 향상"""
+    # 물질명인지 확인
+    if isinstance(coefficient, str) and any(x.isalpha() for x in coefficient):
+        return 0.0
+        
+    # 비어있는 값 처리
+    if pd.isna(coefficient):
+        return 0.0
+        
+    # 문자열을 숫자로 변환
+    if isinstance(coefficient, str):
+        try:
+            # 퍼센트 처리
+            if '%' in coefficient:
+                return float(coefficient.replace('%', '')) / 100
+                
+            # 과학적 표기법 처리
+            elif 'E-' in coefficient or 'E+' in coefficient:
+                # 6.1.E-04와 같은 형식 처리
+                cleaned = coefficient.replace('.E', 'E').replace('E', 'e')
+                return float(cleaned)
+                
+            # 일반 숫자
+            else:
+                return float(coefficient)
+                
+        except Exception as e:
+            print(f"    경고: 값을 숫자로 변환할 수 없음: {coefficient} - {str(e)}")
+            return 0.0
+            
+    # 이미 숫자면 그대로 반환
+    return float(coefficient)
 
 
 def add_coefficients_to_factor_file():
@@ -406,9 +453,14 @@ def add_coefficients_to_factor_file():
 
     # 각 물질군과 물질별로 계수 추가
     all_missing_data = {}
-
+    
+    # 실제 물질군 수 확인
+    real_group_count = 0
+    
     for group_name, condition_cols in groups:
-        print(f"\n물질군 처리 중: {group_name}")
+        # 실제로 처리된 물질군 수 카운트
+        real_group_count += 1
+        print(f"\n물질군 처리 중 ({real_group_count}/{len(groups)}): {group_name}")
 
         # 물질군 이름에서 단위 정보 추출
         unit_info = "단위 없음"
@@ -433,7 +485,7 @@ def add_coefficients_to_factor_file():
             print(f"    새 열 이름: {new_column_name}")
 
             # 초기값은 0으로 설정
-            factor_df[new_column_name] = 0
+            factor_df[new_column_name] = 0.0  # 명시적으로 float 타입 지정
 
             # 각 차종 조건에 맞는 행에 값 설정
             missing_data = []
@@ -442,25 +494,12 @@ def add_coefficients_to_factor_file():
                 try:
                     coefficient = row.iloc[idx + 1]  # 첫 번째 열은 물질명이므로 +1
 
-                    # 빈 값이면 건너뛰기
-                    if pd.isna(coefficient):
-                        continue
-
-                    # 계수값이 문자열이면 퍼센트인지 확인하고 숫자로 변환
-                    if isinstance(coefficient, str):
-                        try:
-                            if '%' in coefficient:
-                                coefficient = float(coefficient.replace('%', '')) / 100
-                            elif 'E-' in coefficient or 'E+' in coefficient:
-                                # 과학적 표기법 처리 (예: 1.93E-08)
-                                # 6.1.E-04와 같은 형식 처리
-                                coefficient = float(coefficient.replace('.E', 'E').replace('E', 'e'))
-                            else:
-                                coefficient = float(coefficient)
-                        except:
-                            print(f"    경고: 값을 숫자로 변환할 수 없음: {coefficient}")
-                            # 변환 실패 시 0으로 설정
-                            coefficient = 0
+                    # 계수값 변환 (개선된 함수 사용)
+                    coefficient = convert_coefficient(coefficient)
+                    
+                    # 0인 경우 건너뛰기 (선택적)
+                    # if coefficient == 0:
+                    #     continue
 
                     # 헤더에서 조건 추출
                     conditions = get_conditions_from_header(condition_col)
@@ -490,7 +529,7 @@ def add_coefficients_to_factor_file():
 
                         # 연식 조건 확인 - 개선된 함수 사용
                         if year_range != (None, None) and not is_year_in_range_direct(factor_row['연식'], year_range[0],
-                                                                                      year_range[1]):
+                                                                                       year_range[1]):
                             is_match = False
                             if error_count < max_error_messages:
                                 non_matching_rows.append(f"연식 불일치: {factor_row['연식']} 범위 밖: {year_range}")
@@ -540,12 +579,19 @@ def add_coefficients_to_factor_file():
 try:
     print("추가데이터 계수 추가 시작...")
 
-    # 기존 함수는 개선된 함수로 대체됨
-
     missing_data = add_coefficients_to_factor_file()
 
     # 결과 저장
     print(f"업데이트된 계수파일 저장 중... ({output_path})")
+    # object 타입의 열 검사 및 처리
+    for col in factor_df.columns:
+        if factor_df[col].dtype == 'object' and col not in ['차종', '소분류', '연료', '연식']:
+            try:
+                factor_df[col] = pd.to_numeric(factor_df[col], errors='coerce').fillna(0)
+            except Exception as e:
+                print(f"열 변환 중 오류 발생: {col} - {str(e)}")
+    
+    # 결과 저장
     factor_df.to_excel(output_path, index=False)
 
     # 빈 셀 정보 저장
