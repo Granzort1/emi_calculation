@@ -320,6 +320,7 @@ if __name__ == '__main__':
     sL = 0.06
     P_4N = 0
 
+
     # === 각 시즌별 배출량 계산 ===
     for season_idx, season_files in enumerate(input_files_seasons):
         if season_idx == 0:

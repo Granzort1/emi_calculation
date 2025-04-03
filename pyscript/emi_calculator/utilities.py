@@ -1,6 +1,7 @@
 import re
 import math
 import pandas as pd
+import unicodedata
 
 def calculate_cold_hot_ratio(fuel, pollutant, T):
     # 엔진미가열 대비 엔진가열 배출 비율 계산 함수
@@ -59,13 +60,20 @@ def check_model_year_condition(condition_str, model_year):
     try:
         model_year = int(model_year)
         condition_str_original = condition_str  # 디버깅용
+        
+        # 문자열 변환 및 정규화
         condition_str = str(condition_str).strip().upper()
-
+        
+        # 유니코드 정규화 (모든 유형의 따옴표를 표준화)
+        condition_str = unicodedata.normalize('NFKD', condition_str)
+        
+        # 모든 유형의 따옴표 제거
+        # 따옴표 문자들의 더 포괄적인 리스트
         # 특수 문자 및 따옴표 제거
         condition_str = condition_str.replace("’", "").replace("‘", "")
         condition_str = condition_str.replace("“", "").replace("”", "")
         condition_str = condition_str.replace("″", "").replace("'", "").replace('"', '')
-
+        
         # 'ALL' 처리
         if condition_str == 'ALL':
             return True
@@ -82,6 +90,10 @@ def check_model_year_condition(condition_str, model_year):
 
         # '='을 '=='로 교체 (>=, <= 등 제외)
         condition_str = re.sub(r'(?<![<>!])=(?!=)', '==', condition_str)
+        
+        # 중복 공백 제거
+        
+        # print(f"Original: '{condition_str_original}', Processed: '{condition_str}'")
 
         # 안전한 eval 사용
         allowed_names = {"__builtins__": None}
@@ -96,7 +108,11 @@ def check_additional_conditions(condition_str, V, T):
     if pd.isna(condition_str) or condition_str.strip() == '':
         return True
     condition_str_original = condition_str  # 디버깅용
-    condition_str = condition_str.strip().upper()
+    
+    # 문자열 변환 및 정규화
+    condition_str = str(condition_str).strip().upper()
+    
+    # 유니코드 정규화
     condition_str = condition_str.replace('V', str(V)).replace('T', str(T))
 
     # 특수 문자 및 따옴표 제거

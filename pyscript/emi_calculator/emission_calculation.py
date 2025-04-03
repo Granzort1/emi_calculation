@@ -2,6 +2,7 @@ import math
 import multiprocessing
 import pandas as pd
 import os
+import openpyxl
 
 # utilities.py의 함수들 임포트
 # 상대경로 임포트를 절대경로로 수정
@@ -9,23 +10,28 @@ from .utilities import (
     calculate_cold_hot_ratio, 
     check_model_year_condition,
     check_additional_conditions, 
-    calculate_emission_factor,
+    calculate_emission_factor, 
     calculate_deterioration_factor, 
     calculate_sox_Aj,
     get_sulfur_fuel
 )
 
 
-def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir, sL=0.06):
+def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir, sL=0.06, update_cd_factor=True):
     """
     기존 스크립트의 calculate_emissions() 함수.
     여기서 SOx 계산 로직을 새 규칙으로 수정함.
+    추가: VOC 구성 물질별 배출량 계산 기능 추가
+    추가: Cd, Cr(VI), Ni, Mn 금속 배출량 계산 기능 추가
+    
+    Parameters:
+        update_cd_factor (bool): Cd 거리당 배출계수 기존 값이 있을 때 덮어쓸지 여부
     """
     factor_dir = r"C:\emi_calculation\factor"  # 1. 필요한 파일 경로 설정
     vehicle_type_ratio_file = os.path.join(factor_dir, "vehicle_type_ratio_coefficient_v1.xlsx")
     vehicle_fuel_ratio_file = os.path.join(factor_dir, "vehicle_fuel_ratio_v1.xlsx")
     vehicle_age_ratio_file = os.path.join(factor_dir, "vehicle_age_ratio_v1.xlsx")
-    emission_factor_file = os.path.join(factor_dir, "EFi_DF_Factor_ver7.xlsx")
+    emission_factor_file = os.path.join(factor_dir, "EFi_DF_Factor_ver9.xlsx")     #9버전에서 아클롤레인 분율 보정(줄어듦)
 
     # 2. 보조 데이터 로드
     vehicle_type_ratio = pd.read_excel(vehicle_type_ratio_file)
@@ -40,8 +46,105 @@ def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir,
     ]
 
     # 4. 결과를 저장할 딕셔너리
+    # VOC 구성 물질 추가 + 중금속 물질 추가
     pollutants = ['CO', 'NOx', 'PM25', 'PM25_재비산', 'PM10',
-                  'PM10_재비산', 'VOC', 'SOx', 'TSP']
+                  'PM10_재비산', 'VOC', 'SOx', 'TSP',
+                  'Benzene', 'Toluene', 'Ethylbenzene', 'Xylenes', 'Styrene',
+                  '135Trimethylbenzene', '124Trimethylbenzene', 'Hexane',
+                  'Formaldehyde', 'Acetaldehyde', 'Acrolein', 'Propionaldehyde', '2Butanone',
+                  'Cd', 'Cr(Ⅵ)', 'Ni', 'Mn', 'Naphthalene', 'Benzoapyrene']  # PAH 물질 추가
+    
+    # VOC 구성 물질 매핑 정의
+    voc_fractions = {
+        'Benzene': 'VOC_frac_Benzene',
+        'Toluene': 'VOC_frac_Toluene',
+        'Ethylbenzene': 'VOC_frac_Ethylbenzene',
+        'Xylenes': 'VOC_frac_Xylenes',
+        'Styrene': 'VOC_frac_Styrene',
+        '135Trimethylbenzene': 'VOC_frac_135Trimethylbenzene',
+        '124Trimethylbenzene': 'VOC_frac_124Trimethylbenzene',
+        'Hexane': 'VOC_frac_Hexane',
+        'Formaldehyde': 'VOC_frac_Formaldehyde',
+        'Acetaldehyde': 'VOC_frac_Acetaldehyde',
+        'Acrolein': 'VOC_frac_Acrolein',
+        'Propionaldehyde': 'VOC_frac_Propionaldehyde',
+        '2Butanone': 'VOC_frac_2Butanone'
+    }
+    
+    # 중금속 물질 배출계수 매핑 정의
+    heavy_metal_factors = {
+        'Cr(Ⅵ)': 'HM_gkm_CrVI',
+        'Ni': 'HM_gkm_Ni',
+        'Mn': 'HM_gkm_Mn',
+        'Cd': 'HM_ppm_Cd',  # ppm 단위, 별도 처리 필요
+        'Naphthalene': 'PAH_gkm_Naphthalene',  # PAH 물질 추가
+        'Benzoapyrene': 'PAH_gkm_Benzoapyrene'  # PAH 물질 추가
+    }
+    
+    # Cd 거리당 배출계수 열 이름 정의
+    cd_distance_factor_column = 'HM_gkm_Cd_calculated'
+    
+    # Cd 거리당 배출계수 계산 및 저장
+    if 'HM_ppm_Cd' in emission_factors.columns:
+        # 파일을 직접 열어서 작업할 준비
+        wb = openpyxl.load_workbook(emission_factor_file)
+        sheet = wb.active
+        
+        # 헤더 찾기
+        header_row = None
+        headers = []
+        for row_idx, row in enumerate(sheet.iter_rows(values_only=True), 1):
+            if 'HM_ppm_Cd' in row:
+                header_row = row_idx
+                headers = row
+                break
+        
+        # 'HM_ppm_Cd' 열 인덱스 찾기
+        cd_ppm_col_idx = headers.index('HM_ppm_Cd') + 1  # 1-based index
+        
+        # 'HM_gkm_Cd_calculated' 열이 있는지 확인
+        cd_gkm_col_idx = None
+        if cd_distance_factor_column in headers:
+            cd_gkm_col_idx = headers.index(cd_distance_factor_column) + 1
+            # 열이 이미 존재하지만 업데이트하지 않기로 한 경우 아무것도 하지 않음
+            if not update_cd_factor:
+                pass  # 기존 값 사용, 아무 작업 안 함
+            else:
+                pass  # 업데이트 모드, 아래에서 계산 진행
+        else:
+            # 새 열 추가
+            cd_gkm_col_idx = len(headers) + 1
+            sheet.cell(row=header_row, column=cd_gkm_col_idx).value = cd_distance_factor_column
+        
+        # 각 행 처리 (헤더 다음 행부터)
+        if update_cd_factor or cd_gkm_col_idx is None or sheet.cell(row=header_row+1, column=cd_gkm_col_idx).value is None:
+            for row_idx, row in enumerate(sheet.iter_rows(min_row=header_row+1, values_only=True), header_row+1):
+                if row_idx > header_row:  # 헤더 다음 행부터 처리
+                    cd_ppm_value = sheet.cell(row=row_idx, column=cd_ppm_col_idx).value
+                    
+                    # 조건 확인 및 속도 값 추출 (각 행에 대한 조건 확인은 복잡할 수 있음)
+                    # 여기서는 단순화를 위해 주어진 속도 V 사용
+                    sox_indicator = None
+                    if '황산화물배출계수' in headers:
+                        sox_col_idx = headers.index('황산화물배출계수') + 1
+                        sox_indicator = sheet.cell(row=row_idx, column=sox_col_idx).value
+                    
+                    # 연료 소비량 계산
+                    fuel_consumption = None
+                    if sox_indicator:
+                        fuel_consumption = calculate_sox_Aj(sox_indicator, V)
+                    
+                    # Cd 거리당 배출계수 계산
+                    if cd_ppm_value is not None and fuel_consumption is not None:
+                        cd_gkm_value = cd_ppm_value * fuel_consumption * 1e-6  # ppm 값을 g/km로 변환
+                        sheet.cell(row=row_idx, column=cd_gkm_col_idx).value = cd_gkm_value
+        
+        # 파일 저장
+        wb.save(emission_factor_file)
+        
+        # 업데이트된 데이터 다시 로드
+        emission_factors = pd.read_excel(emission_factor_file)
+    
     results = {pollutant: [] for pollutant in pollutants}
 
     # 배출계수를 찾지 못한 조합들 저장할 리스트
@@ -82,6 +185,9 @@ def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir,
         'subtype_mapping': subtype_mapping,
         'target_classes': target_classes,
         'pollutants': pollutants,
+        'voc_fractions': voc_fractions,  # VOC 구성 물질 분율 매핑 추가
+        'heavy_metal_factors': heavy_metal_factors,  # 중금속 배출계수 매핑 추가
+        'cd_distance_factor_column': cd_distance_factor_column,  # Cd 거리당 배출계수 열 이름
         'VKT': VKT,
         'V': V,
         'T': T,
@@ -182,7 +288,7 @@ def calculate_emissions(inputdata, VKT, V, T, ta_min, ta_rise, P_4N, output_dir,
                     merged_df.to_excel(output_file, index=False)
 
             else:
-                # CO, NOx, VOC, SOx 등
+                # CO, NOx, VOC, SOx, Benzene, Toluene 등 기본 배출물질 + 중금속 물질(Cd, Cr(VI), Ni, Mn)
                 cols = ['DateTime']
                 vehicle_classes = [
                     '01_car', '02_taxi', '03_van', '04_bus',
@@ -222,6 +328,8 @@ def calculate_emission_for_time(row, auxiliary_data):
     """
     실제 각 row(시간)에 대해 배출량을 계산하는 함수.
     여기서 SOx 계산 부분만 새 규칙 적용.
+    추가: VOC 구성 물질별 배출량 계산 기능 추가
+    추가: 중금속(Cd, Cr(VI), Ni, Mn) 배출량 계산 기능 추가
     """
 
     emission_row = {'DateTime': row['DateTime']}
@@ -233,6 +341,9 @@ def calculate_emission_for_time(row, auxiliary_data):
     subtype_mapping = auxiliary_data['subtype_mapping']
     target_classes = auxiliary_data['target_classes']
     pollutants = auxiliary_data['pollutants']
+    voc_fractions = auxiliary_data.get('voc_fractions', {})  # VOC 구성 물질 분율 매핑
+    heavy_metal_factors = auxiliary_data.get('heavy_metal_factors', {})  # 중금속 배출계수 매핑
+    cd_distance_factor_column = auxiliary_data.get('cd_distance_factor_column')  # Cd 거리당 배출계수 열 이름
     VKT = auxiliary_data['VKT']
     V = auxiliary_data['V']
     T = auxiliary_data['T']
@@ -415,6 +526,7 @@ def calculate_emission_for_time(row, auxiliary_data):
 
                     # SOx나 기타 물질은 0 처리
                     for pollutant in pollutants:
+                        emission = 0  # 기본값 0
                         if pollutant == 'SOx':
                             pass
                         else:
@@ -429,8 +541,60 @@ def calculate_emission_for_time(row, auxiliary_data):
                             emission_row[key] += emission
                 continue
 
-            for pollutant in pollutants:
+            # VOC 배출량을 저장할 변수 (VOC 구성 물질 계산에 사용)
+            voc_emission = 0
 
+            for pollutant in pollutants:
+                # VOC 구성 물질은 나중에 계산하기 위해 건너뜀
+                if pollutant in voc_fractions:
+                    continue
+                
+                # 중금속 물질 처리
+                if pollutant in heavy_metal_factors:
+                    factor_column = heavy_metal_factors[pollutant]
+                    
+                    # Cd 특별 처리 - 계산된 거리당 배출계수 사용
+                    if pollutant == 'Cd' and cd_distance_factor_column in ef_subset.columns:
+                        ef_value = ef_subset[cd_distance_factor_column].iloc[0]
+                        if pd.isna(ef_value):
+                            # 계산된 값이 없을 경우 직접 계산
+                            sox_indicator = ef_subset['황산화물배출계수'].iloc[0] if '황산화물배출계수' in ef_subset.columns else None
+                            cd_ppm_value = ef_subset[factor_column].iloc[0] if factor_column in ef_subset.columns else 0
+                            
+                            if sox_indicator and not pd.isna(cd_ppm_value):
+                                fuel_consumption = calculate_sox_Aj(sox_indicator, V)
+                                if fuel_consumption is not None:
+                                    ef_value = cd_ppm_value * fuel_consumption * 1e-6
+                                else:
+                                    ef_value = 0
+                            else:
+                                ef_value = 0
+                        
+                        # 배출량 계산 = 배출계수(g/km) × VKT × 차량수 × 조합비율
+                        emission = ef_value * VKT * vehicle_count * combo_ratio
+                        
+                    # Cr(VI), Ni, Mn 처리 - 직접 g/km 단위 배출계수 사용
+                    else:
+                        if factor_column in ef_subset.columns:
+                            ef_value = ef_subset[factor_column].iloc[0]
+                            if pd.isna(ef_value):
+                                ef_value = 0
+                            
+                            # 배출량 계산 = 배출계수(g/km) × VKT × 차량수 × 조합비율
+                            emission = ef_value * VKT * vehicle_count * combo_ratio
+                        else:
+                            emission = 0
+                    
+                    # 결과 저장
+                    key = f"{vehicle_class}_{pollutant}"
+                    if key not in emission_row:
+                        emission_row[key] = emission
+                    else:
+                        emission_row[key] += emission
+                    
+                    continue
+
+                # 기존 물질 처리
                 if pollutant == 'SOx':
                     # [새 규칙] EFi_DF_Factor_ver7.xlsx 안에 '황산화물배출계수' 열이 있다고 가정
                     # 예: ef_pollutant['황산화물배출계수'].iloc[0] => E01, E16 등
@@ -505,13 +669,14 @@ def calculate_emission_for_time(row, auxiliary_data):
                     else:
                         emission = Eij
 
-                    if fuel == '휘발유':
+                    if fuel == '휘발유' and pollutant == 'VOC':
                         R = vehicle_count * combo_ratio * VKT * (0.6 * e_R_HOT + 0.4*e_R_WARM)
                         E_EVA = (((vehicle_count * combo_ratio * e_d * VKT) / (daily_vkt.get(vehicle_class))) + R)
                         emission += E_EVA #g/h
-                    else:
-                        pass
-
+                        
+                    # VOC 구성 물질 계산을 위해 VOC 배출량 저장
+                    if pollutant == 'VOC':
+                        voc_emission = emission
 
                 # 결과 저장
                 key = f"{vehicle_class}_{pollutant}"
@@ -519,5 +684,25 @@ def calculate_emission_for_time(row, auxiliary_data):
                     emission_row[key] = emission
                 else:
                     emission_row[key] += emission
+
+            # VOC 구성 물질 배출량 계산
+            if voc_emission > 0:
+                for voc_component, fraction_col in voc_fractions.items():
+                    if fraction_col in ef_subset.columns:
+                        # VOC 구성 물질의 분율 값
+                        fraction_value = ef_subset[fraction_col].iloc[0]
+                        # 분율이 NaN이면 0으로 처리
+                        if pd.isna(fraction_value):
+                            fraction_value = 0
+                        
+                        # VOC 구성 물질 배출량 = VOC 배출량 * 분율
+                        component_emission = voc_emission * fraction_value
+                        
+                        # 결과 저장
+                        component_key = f"{vehicle_class}_{voc_component}"
+                        if component_key not in emission_row:
+                            emission_row[component_key] = component_emission
+                        else:
+                            emission_row[component_key] += component_emission
 
     return emission_row
